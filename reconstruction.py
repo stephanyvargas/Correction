@@ -66,6 +66,8 @@ mask = np.logical_and(mask1, mask2)
 p_0 = p0[mask]
 p_1 = p1[mask]
 p_2 = p2[mask]
+
+
 tau = (p_0 + p_1/(1+np.exp(-temp/p_2)))*1E-6
 A = tau * (1-np.exp(-dt/tau))
 print(A)
