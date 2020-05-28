@@ -7,7 +7,7 @@ import sys
 
 '''This code uses the single tau reconstruction method.
 First is to load the constant table database. The important
-constants for this algorithm are p0, p1, p2. The other constan
+constants for this algorithm are p0, p1, p2. The other constants
 are also loaded for verification afterwards'''
 
 droop_under_file = '/home/stephy/ICECUBE/undershoot/20191203/constant_table/DroopUnder.txt'
@@ -36,7 +36,8 @@ p5 = undertemp[:,5]
 
 '''Load a random Waveform for a given temperature
 for a given HVB, each measurement has 100 waveforms
-This reconstruction is done on an individual measurement.'''
+This reconstruction is done on an individual measurement.
+The correction begins at 90% of the pulse height.'''
 Batch = int(sys.argv[1])
 Directory_board = int(sys.argv[2])
 Directory_temp = sys.argv[3]
@@ -47,9 +48,9 @@ filename = sorted(glob.glob(waveform))
 random_waveform = filename[random_wf]
 data = np.loadtxt(fname=random_waveform, delimiter=',', skiprows=25)
 time = data[:,0]
-dt = time[1]-time[0]#5E-6
 volt = data[:,1]
 volts = volt - np.mean(volt[0:100])
+dt = np.diff(time)[0]
 mask = volts >= 0.9*max(volts) #begin the reconstruction at 90% of the maximum ->trigger
 droop_trigger = time[mask]
 time_trigger = droop_trigger[0]
@@ -61,9 +62,10 @@ and the database values. The time and the tau are in
 seconds.'''
 mask1 = batch_dt == Batch
 mask2 = board_dt == Directory_board
-p_0 = p0[mask2]
-p_1 = p1[mask2]
-p_2 = p2[mask2]
+mask = np.logical_and(mask1, mask2)
+p_0 = p0[mask]
+p_1 = p1[mask]
+p_2 = p2[mask]
 tau = (p_0 + p_1/(1+np.exp(-temp/p_2)))*1E-6
 A = tau * (1-np.exp(-dt/tau))
 print(A)
@@ -84,7 +86,7 @@ for j in range(1, len(Y)):
 X = np.asarray(X)
 print(Sj[0], Sj[1], X[0])
 plt.plot(time, volts)
-plt.plot(T,Sj)
+#plt.plot(T,Sj)
 plt.show()
 
 #fj = -(1/tau)*A^2*np.exp(-(j-1)/tau)
