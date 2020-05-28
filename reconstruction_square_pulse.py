@@ -45,19 +45,19 @@ print(dt)
 A = (tau/dt) * (1-np.exp(-dt/tau))
 #print(A) Amplitude at this point A= 0.996670739874859
 S = 0
-X0 = (1/A)*y[0]
+X0 = 0#(1/A)*y[0]
 X = [X0]
 
-for i in range(1, len(x)):
+for i in range(0, len(x)):
     sj = X[i-1] + S*np.exp(-dt/tau)
     xj = (1/A)*y[i] + (dt*A/tau)*sj
     S = sj
     X.append(xj)
 
 
-plt.plot(x, square_pulse, label='Square pulse')
-#plt.plot(x,y, label=r'drooped pulse with $\tau=$ {}'.format(tau))
-#plt.plot(x, X, label='Droop correction')
+#plt.plot(x, square_pulse, label='Square pulse')
+plt.plot(x,y, label=r'drooped pulse with $\tau=$ {}'.format(tau))
+plt.plot(x, X[1:], label='Droop correction')
 #plt.axhline(1/A)
 plt.xlabel('Time')
 plt.ylabel('Voltage')
@@ -66,9 +66,9 @@ plt.grid(linestyle='dotted')
 plt.show()
 
 
-plt.plot(x, square_pulse-X)
+plt.plot(x, square_pulse-X[1:])
 plt.title('Difference: Original square pulse - Droop corrected pulse')
 plt.xlabel('Time')
 plt.ylabel('Difference (Original - Corrected pulse)')
 plt.grid(linestyle='dotted')
-#plt.show()
+plt.show()
