@@ -3,7 +3,7 @@ from random import randint
 import numpy as np
 import glob
 import sys
-
+plt.rcParams.update({'font.size': 13})
 
 '''This code uses the single tau reconstruction method.
 First is to load the constant table database. The important
@@ -42,20 +42,52 @@ Batch = int(sys.argv[1])
 Directory_board = int(sys.argv[2])
 Directory_temp = sys.argv[3]
 temp = float(sys.argv[4])
-random_wf = randint(0,99)
-waveform = '/home/stephy/ICECUBE/database/B%s_HVB_%s/%s/*.CSV' %(Batch, Directory_board, Directory_temp)
-filename = sorted(glob.glob(waveform))
-random_waveform = filename[random_wf]
-data = np.loadtxt(fname=random_waveform, delimiter=',', skiprows=25)
-time = data[:,0]
-volt = data[:,1]
-volts = volt - np.mean(volt[0:100])
-dt = np.diff(time)[0]
-mask = volts >= 0.9*max(volts) #begin the reconstruction at 90% of the maximum ->trigger
-droop_trigger = time[mask]
-time_trigger = droop_trigger[0]
-#print(time_trigger, dt)
 
+def random_wfcorrection(Batch, Directory_board, Directory_temp):
+    #random_wf = randint(0,99)
+    waveform = '/home/stephy/ICECUBE/database/B%s_HVB_%s/%s/*.CSV' %(Batch, Directory_board, Directory_temp)
+    filename = sorted(glob.glob(waveform))
+    random_wf = randint(0,len(filename))
+    random_waveform = filename[random_wf]
+    data = np.loadtxt(fname=random_waveform, delimiter=',', skiprows=25)
+    time = data[:,0]
+    volt = data[:,1]
+    volts = volt - np.mean(volt[0:100])
+    dt = np.diff(time)[0]
+    mask = volts >= 0.9*max(volts) #begin the reconstruction at 90% of the maximum ->trigger
+    droop_trigger = time[mask]
+    time_trigger = droop_trigger[0]
+    return time, volts, dt, time_trigger
+
+def mean_wfcorrection(Batch, Directory_board, Directory_temp):
+    waveform = '/home/stephy/ICECUBE/database/B%s_HVB_%s/%s/*.CSV' %(Batch, Directory_board, Directory_temp)
+    filename = sorted(glob.glob(waveform))
+    NumF = len(filename)
+    Times = []
+    Voltages = []
+    for i in range(0, NumF):
+        data = np.loadtxt(fname=filename[i], delimiter=',', skiprows=25)
+        time = data[:,0]
+        volt = data[:,1]
+        volts = volt - np.mean(volt[0:100])
+        Times.append(time)
+        Voltages.append(volts)
+
+    Times = np.asarray(Times)
+    Voltages = np.asarray(Voltages)
+    TIME = sum(Times)/len(Times)
+    VOLT = sum(Voltages)/len(Voltages)
+    TIME = np.asarray(TIME)
+    VOLT = np.asarray(VOLT)
+
+    dt = np.diff(TIME)[0]
+    mask = VOLT >= 0.9*max(VOLT) #begin the reconstruction at 90% of the maximum ->trigger
+    droop_trigger = time[mask]
+    time_trigger = droop_trigger[0]
+    return TIME, VOLT, dt, time_trigger
+
+#time, volts, dt, time_trigger = random_wfcorrection(Batch, Directory_board, Directory_temp)
+time, volts, dt, time_trigger = mean_wfcorrection(Batch, Directory_board, Directory_temp)
 
 '''Recover the droop time constant from the temperature
 and the database values. The time and the tau are in
@@ -66,29 +98,70 @@ mask = np.logical_and(mask1, mask2)
 p_0 = p0[mask]
 p_1 = p1[mask]
 p_2 = p2[mask]
+p_3 = p3[mask]
+p_4 = p4[mask]
+p_5 = p5[mask]
 
 
-tau = (p_0 + p_1/(1+np.exp(-temp/p_2)))*1E-6
-A = tau * (1-np.exp(-dt/tau))
-print(A)
-A = A[0]
-print(tau, A)
-Mask = time >= time_trigger
-Y = volts[Mask]
-T = time[Mask]
-X = [1/A * Y[0]]
-Sj = [0]
+tau_2 = (p_0 + p_1/(1+np.exp(-temp/p_2)))*1E-6
+tau = (p_3 + p_4/(1+np.exp(-temp/p_5)))*1E-6
+mask_trigger = time >= time_trigger
+Y = volts[mask_trigger]
+T = time[mask_trigger]
 
-for j in range(1, len(Y)):
-    S = X[j-1] + np.exp(-dt/tau) * Sj[j-1]
-    Xj = 1/A *Y[j] + (A*A*dt)/tau * (X[j-1] + np.exp(-dt/tau)*Sj[j-1])
-    X.append(Xj)
-    Sj.append(S)
 
-X = np.asarray(X)
-print(Sj[0], Sj[1], X[0])
-plt.plot(time, volts)
-#plt.plot(T,Sj)
+def chris_correction(tau, dt, Y, T):
+    A = (tau/dt) * (1-np.exp(-dt/tau))
+    S = 0
+    X0 = (1/A * Y[0])
+    X = [X0]
+    for j in range(1, len(T)):
+        sj = X[j-1] + S*np.exp(-dt/tau)
+        xj = (1/A) * Y[j] + (A*dt)/tau * sj
+        S = sj
+        X.append(xj)
+    return X
+
+def stephy_correction(tau, dt, Y, T):
+    A = np.max(Y)
+    B = np.min(Y)
+    mask = Y == np.min(Y)
+    width = T[mask]
+
+    X = []
+    time = T[0]
+    j = 0
+    #Droop Correction
+    while time < width[0]:
+        xj = Y[j] + A * (1 - np.exp(-(T[j]-T[0])/tau))
+        X.append(xj)
+        time = T[j]
+        j += 1
+    #Undershoot correction
+    for i in range(j, len(T)):
+        xi = Y[i] - B * (np.exp(-(T[i]-width[0])/tau))
+        X.append(xi)
+        time = T[i]
+    return X
+
+Xc = chris_correction(tau, dt, Y, T)
+Xs = stephy_correction(tau, dt, Y, T)
+
+TAU = tau[0]*1E6
+Xc = np.asarray(Xc)
+Xs = np.asarray(Xs)
+#plt.title(f'Correction on HV Board Number {Directory_board}, Batch {Batch}, Temperature {temp}')
+plt.plot(time*1E6, volts*1000, label=fr'Drooped pulse with $\tau=$ {TAU:.2f} $\mu$s')
+plt.plot(T*1E6, Xc*1000, label='Correction (Chris)')
+#plt.plot(T*1E6, Xs*1000, label='Correction (Amplitude dependent)')
+#plt.plot(T*1E6, (Xc/Xs))#, label='Ratio (Chris/Steph)')
+#plt.xlim(T[0]*1E6,10)
+#plt.ylim(0.9,1.1)
+plt.xlabel(r'Time [$\mu$s]')
+plt.ylabel('Voltage [mV]')
+#plt.ylabel('Ratio (Chris/Steph)')
+plt.legend(loc='best')
+plt.grid(linestyle='dotted')
 plt.show()
 
 #fj = -(1/tau)*A^2*np.exp(-(j-1)/tau)
