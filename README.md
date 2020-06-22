@@ -1,6 +1,6 @@
 # Correction
 Correction of the droop and undershoot behavior on pulses.
-This scripts run on Python3.
+These scripts run on Python3.
 
 #reconstruction.py file
 Aims to correct pulses using real data from a High Voltage Board
